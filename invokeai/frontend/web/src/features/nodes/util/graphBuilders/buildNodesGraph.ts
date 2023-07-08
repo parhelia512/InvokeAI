@@ -45,6 +45,12 @@ export const parseFieldValue = (field: InputFieldValue) => {
     }
   }
 
+  if (field.type === 'controlnet_model') {
+    if (field.value) {
+      return modelIdToLoRAModelField(field.value);
+    }
+  }
+
   return field.value;
 };
 

@@ -66,6 +66,7 @@ export type FieldType =
   | 'model'
   | 'vae_model'
   | 'lora_model'
+  | 'controlnet_model'
   | 'array'
   | 'item'
   | 'color'
@@ -95,6 +96,7 @@ export type InputFieldValue =
   | ModelInputFieldValue
   | VaeModelInputFieldValue
   | LoRAModelInputFieldValue
+  | ControlNetModelInputFieldValue
   | ArrayInputFieldValue
   | ItemInputFieldValue
   | ColorInputFieldValue
@@ -122,6 +124,7 @@ export type InputFieldTemplate =
   | ModelInputFieldTemplate
   | VaeModelInputFieldTemplate
   | LoRAModelInputFieldTemplate
+  | ControlNetModelInputFieldTemplate
   | ArrayInputFieldTemplate
   | ItemInputFieldTemplate
   | ColorInputFieldTemplate
@@ -244,6 +247,11 @@ export type LoRAModelInputFieldValue = FieldValueBase & {
   value?: string;
 };
 
+export type ControlNetModelInputFieldValue = FieldValueBase & {
+  type: 'controlnet_model';
+  value?: string;
+};
+
 export type ArrayInputFieldValue = FieldValueBase & {
   type: 'array';
   value?: (string | number)[];
@@ -361,6 +369,11 @@ export type VaeModelInputFieldTemplate = InputFieldTemplateBase & {
 export type LoRAModelInputFieldTemplate = InputFieldTemplateBase & {
   default: string;
   type: 'lora_model';
+};
+
+export type ControlNetModelInputFieldTemplate = InputFieldTemplateBase & {
+  default: string;
+  type: 'controlnet_model';
 };
 
 export type ArrayInputFieldTemplate = InputFieldTemplateBase & {

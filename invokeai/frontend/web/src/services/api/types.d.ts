@@ -27,6 +27,8 @@ export type BaseModelType = components['schemas']['BaseModelType'];
 export type MainModelField = components['schemas']['MainModelField'];
 export type VAEModelField = components['schemas']['VAEModelField'];
 export type LoRAModelField = components['schemas']['LoRAModelField'];
+export type ControlNetModelField =
+  components['schemas']['ControlNetModelField'];
 export type ModelsList = components['schemas']['ModelsList'];
 
 // Model Configs
