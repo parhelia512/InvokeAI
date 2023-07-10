@@ -1,8 +1,12 @@
 import type { PayloadAction } from '@reduxjs/toolkit';
 import { createSlice } from '@reduxjs/toolkit';
 import { DEFAULT_SCHEDULER_NAME } from 'app/constants';
+import { roundToMultiple } from 'common/util/roundDownToMultiple';
 import { configChanged } from 'features/system/store/configSlice';
-import { setShouldShowAdvancedOptions } from 'features/ui/store/uiSlice';
+import {
+  setAspectRatio,
+  setShouldShowAdvancedOptions,
+} from 'features/ui/store/uiSlice';
 import { clamp } from 'lodash-es';
 import { ImageDTO } from 'services/api/types';
 import { clipSkipMap } from '../components/Parameters/Advanced/ParamClipSkip';
@@ -55,6 +59,7 @@ export interface GenerationState {
   seamlessXAxis: boolean;
   seamlessYAxis: boolean;
   clipSkip: number;
+  shouldUseCpuNoise: boolean;
 }
 
 export const initialGenerationState: GenerationState = {
@@ -90,6 +95,7 @@ export const initialGenerationState: GenerationState = {
   seamlessXAxis: false,
   seamlessYAxis: false,
   clipSkip: 0,
+  shouldUseCpuNoise: true,
 };
 
 const initialState: GenerationState = initialGenerationState;
@@ -136,6 +142,11 @@ export const generationSlice = createSlice({
     },
     setWidth: (state, action: PayloadAction<number>) => {
       state.width = action.payload;
+    },
+    toggleSize: (state) => {
+      const [width, height] = [state.width, state.height];
+      state.width = height;
+      state.height = width;
     },
     setScheduler: (state, action: PayloadAction<SchedulerParam>) => {
       state.scheduler = action.payload;
@@ -239,6 +250,9 @@ export const generationSlice = createSlice({
     setClipSkip: (state, action: PayloadAction<number>) => {
       state.clipSkip = action.payload;
     },
+    shouldUseCpuNoiseChanged: (state, action: PayloadAction<boolean>) => {
+      state.shouldUseCpuNoise = action.payload;
+    },
   },
   extraReducers: (builder) => {
     builder.addCase(configChanged, (state, action) => {
@@ -257,6 +271,12 @@ export const generationSlice = createSlice({
       const advancedOptionsStatus = action.payload;
       if (!advancedOptionsStatus) state.clipSkip = 0;
     });
+    builder.addCase(setAspectRatio, (state, action) => {
+      const ratio = action.payload;
+      if (ratio) {
+        state.height = roundToMultiple(state.width / ratio, 8);
+      }
+    });
   },
 });
 
@@ -266,7 +286,9 @@ export const {
   resetParametersState,
   resetSeed,
   setCfgScale,
+  setWidth,
   setHeight,
+  toggleSize,
   setImg2imgStrength,
   setInfillMethod,
   setIterations,
@@ -287,7 +309,6 @@ export const {
   setThreshold,
   setTileSize,
   setVariationAmount,
-  setWidth,
   setShouldUseSymmetry,
   setHorizontalSymmetrySteps,
   setVerticalSymmetrySteps,
@@ -298,6 +319,7 @@ export const {
   setSeamlessXAxis,
   setSeamlessYAxis,
   setClipSkip,
+  shouldUseCpuNoiseChanged,
 } = generationSlice.actions;
 
 export default generationSlice.reducer;
