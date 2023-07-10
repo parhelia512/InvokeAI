@@ -7,8 +7,6 @@ import { defaultSelectorOptions } from 'app/store/util/defaultMemoizeOptions';
 import IAIDndImage from 'common/components/IAIDndImage';
 import { imageToDeleteSelected } from 'features/imageDeletion/store/imageDeletionSlice';
 import { MouseEvent, memo, useCallback, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-import { FaTrash } from 'react-icons/fa';
 import { ImageDTO } from 'services/api/types';
 import {
   imageRangeEndSelected,
@@ -20,15 +18,10 @@ import ImageContextMenu from './ImageContextMenu';
 export const makeSelector = (image_name: string) =>
   createSelector(
     [stateSelector],
-    ({ gallery }) => {
-      const isSelected = gallery.selection.includes(image_name);
-      const selectionCount = gallery.selection.length;
-
-      return {
-        isSelected,
-        selectionCount,
-      };
-    },
+    ({ gallery }) => ({
+      isSelected: gallery.selection.includes(image_name),
+      selectionCount: gallery.selection.length,
+    }),
     defaultSelectorOptions
   );
 
@@ -36,20 +29,15 @@ interface HoverableImageProps {
   imageDTO: ImageDTO;
 }
 
-/**
- * Gallery image component with delete/use all/use seed buttons on hover.
- */
 const GalleryImage = (props: HoverableImageProps) => {
+  const dispatch = useAppDispatch();
+
   const { imageDTO } = props;
-  const { image_url, thumbnail_url, image_name } = imageDTO;
+  const { image_name } = imageDTO;
 
   const localSelector = useMemo(() => makeSelector(image_name), [image_name]);
 
   const { isSelected, selectionCount } = useAppSelector(localSelector);
-
-  const dispatch = useAppDispatch();
-
-  const { t } = useTranslation();
 
   const handleClick = useCallback(
     (e: MouseEvent<HTMLDivElement>) => {
@@ -115,12 +103,12 @@ const GalleryImage = (props: HoverableImageProps) => {
               isSelected={isSelected}
               minSize={0}
               onClickReset={handleDelete}
-              resetIcon={<FaTrash />}
-              resetTooltip="Delete image"
               imageSx={{ w: 'full', h: 'full' }}
-              // withResetIcon // removed bc it's too easy to accidentally delete images
               isDropDisabled={true}
               isUploadDisabled={true}
+              // resetIcon={<FaTrash />}
+              // resetTooltip="Delete image"
+              // withResetIcon // removed bc it's too easy to accidentally delete images
             />
           </Box>
         )}
