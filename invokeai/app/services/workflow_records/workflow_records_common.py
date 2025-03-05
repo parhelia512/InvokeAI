@@ -31,13 +31,12 @@ class WorkflowRecordOrderBy(str, Enum, metaclass=MetaEnum):
 class WorkflowCategory(str, Enum, metaclass=MetaEnum):
     User = "user"
     Default = "default"
+    Project = "project"
 
 
 class WorkflowMeta(BaseModel):
     version: str = Field(description="The version of the workflow schema.")
-    category: WorkflowCategory = Field(
-        default=WorkflowCategory.User, description="The category of the workflow (user or default)."
-    )
+    category: WorkflowCategory = Field(description="The category of the workflow (user or default).")
 
     @field_validator("version")
     def validate_version(cls, version: str):
@@ -61,9 +60,13 @@ class WorkflowWithoutID(BaseModel):
     notes: str = Field(description="The notes of the workflow.")
     exposedFields: list[ExposedField] = Field(description="The exposed fields of the workflow.")
     meta: WorkflowMeta = Field(description="The meta of the workflow.")
-    # TODO: nodes and edges are very loosely typed
+    # TODO(psyche): nodes, edges and form are very loosely typed - they are strictly modeled and checked on the frontend.
     nodes: list[dict[str, JsonValue]] = Field(description="The nodes of the workflow.")
     edges: list[dict[str, JsonValue]] = Field(description="The edges of the workflow.")
+    # TODO(psyche): We have a crapload of workflows that have no form, bc it was added after we introduced workflows.
+    # This is typed as optional to prevent errors when pulling workflows from the DB. The frontend adds a default form if
+    # it is None.
+    form: dict[str, JsonValue] | None = Field(default=None, description="The form of the workflow.")
 
     model_config = ConfigDict(extra="ignore")
 
@@ -116,3 +119,11 @@ class WorkflowRecordListItemDTO(WorkflowRecordDTOBase):
 
 
 WorkflowRecordListItemDTOValidator = TypeAdapter(WorkflowRecordListItemDTO)
+
+
+class WorkflowRecordWithThumbnailDTO(WorkflowRecordDTO):
+    thumbnail_url: str | None = Field(default=None, description="The URL of the workflow thumbnail.")
+
+
+class WorkflowRecordListItemWithThumbnailDTO(WorkflowRecordListItemDTO):
+    thumbnail_url: str | None = Field(default=None, description="The URL of the workflow thumbnail.")
