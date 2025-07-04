@@ -3,6 +3,8 @@ import { getPrefixedId } from 'features/controlLayers/konva/util';
 import { selectMainModelConfig, selectParamsSlice } from 'features/controlLayers/store/paramsSlice';
 import { selectRefImagesSlice } from 'features/controlLayers/store/refImagesSlice';
 import { selectCanvasMetadata, selectCanvasSlice } from 'features/controlLayers/store/selectors';
+import { isFluxKontextReferenceImageConfig } from 'features/controlLayers/store/types';
+import { getGlobalReferenceImageWarnings } from 'features/controlLayers/store/validators';
 import { addFLUXFill } from 'features/nodes/util/graph/generation/addFLUXFill';
 import { addFLUXLoRAs } from 'features/nodes/util/graph/generation/addFLUXLoRAs';
 import { addFLUXReduxes } from 'features/nodes/util/graph/generation/addFLUXRedux';
@@ -32,8 +34,8 @@ import { addIPAdapters } from './addIPAdapters';
 const log = logger('system');
 
 export const buildFLUXGraph = async (arg: GraphBuilderArg): Promise<GraphBuilderReturn> => {
-  const { generationMode, state } = arg;
-  log.debug({ generationMode }, 'Building FLUX graph');
+  const { generationMode, state, manager } = arg;
+  log.debug({ generationMode, manager: manager?.id }, 'Building FLUX graph');
 
   const params = selectParamsSlice(state);
   const canvas = selectCanvasSlice(state);
@@ -87,6 +89,15 @@ export const buildFLUXGraph = async (arg: GraphBuilderArg): Promise<GraphBuilder
     guidance = 30;
   }
 
+  const isFluxKontextDev = model.name?.toLowerCase().includes('kontext');
+  if (isFluxKontextDev) {
+    if (generationMode !== 'txt2img') {
+      throw new UnsupportedGenerationModeError(t('toast.fluxKontextIncompatibleGenerationMode'));
+    }
+
+    guidance = 30;
+  }
+
   const { positivePrompt } = selectPresetModifiedPrompts(state);
 
   const g = new Graph(getPrefixedId('flux_graph'));
@@ -108,6 +119,7 @@ export const buildFLUXGraph = async (arg: GraphBuilderArg): Promise<GraphBuilder
     type: 'collect',
     id: getPrefixedId('pos_cond_collect'),
   });
+
   const denoise = g.addNode({
     type: 'flux_denoise',
     id: getPrefixedId('flux_denoise'),
@@ -124,6 +136,31 @@ export const buildFLUXGraph = async (arg: GraphBuilderArg): Promise<GraphBuilder
     type: 'flux_vae_decode',
     id: getPrefixedId('flux_vae_decode'),
   });
+
+  if (isFluxKontextDev) {
+    const validFLUXKontextConfigs = selectRefImagesSlice(state)
+      .entities.filter((entity) => entity.isEnabled)
+      .filter((entity) => isFluxKontextReferenceImageConfig(entity.config))
+      .filter((entity) => getGlobalReferenceImageWarnings(entity, model).length === 0);
+
+    // FLUX Kontext supports only a single conditioning image - we'll just take the first one.
+    // In the future, we can explore concatenating multiple conditioning images in image or latent space.
+    const firstValidFLUXKontextConfig = validFLUXKontextConfigs[0];
+
+    if (firstValidFLUXKontextConfig) {
+      const { image } = firstValidFLUXKontextConfig.config;
+
+      assert(image, 'getGlobalReferenceImageWarnings checks if the image is there, this should never raise');
+
+      const kontextConditioning = g.addNode({
+        type: 'flux_kontext',
+        id: getPrefixedId('flux_kontext'),
+        image,
+      });
+      g.addEdge(kontextConditioning, 'kontext_cond', denoise, 'kontext_conditioning');
+      g.upsertMetadata({ ref_images: [firstValidFLUXKontextConfig] }, 'merge');
+    }
+  }
 
   g.addEdge(modelLoader, 'transformer', denoise, 'transformer');
   g.addEdge(modelLoader, 'vae', denoise, 'controlnet_vae');
@@ -164,10 +201,11 @@ export const buildFLUXGraph = async (arg: GraphBuilderArg): Promise<GraphBuilder
   let canvasOutput: Invocation<ImageOutputNodes> = l2i;
 
   if (isFLUXFill && (generationMode === 'inpaint' || generationMode === 'outpaint')) {
+    assert(manager !== null);
     canvasOutput = await addFLUXFill({
       state,
       g,
-      manager: arg.canvasManager,
+      manager,
       l2i,
       denoise,
       originalSize,
@@ -177,9 +215,10 @@ export const buildFLUXGraph = async (arg: GraphBuilderArg): Promise<GraphBuilder
     canvasOutput = addTextToImage({ g, l2i, originalSize, scaledSize });
     g.upsertMetadata({ generation_mode: 'flux_txt2img' });
   } else if (generationMode === 'img2img') {
+    assert(manager !== null);
     canvasOutput = await addImageToImage({
       g,
-      manager: arg.canvasManager,
+      manager,
       l2i,
       i2lNodeType: 'flux_vae_encode',
       denoise,
@@ -192,10 +231,11 @@ export const buildFLUXGraph = async (arg: GraphBuilderArg): Promise<GraphBuilder
     });
     g.upsertMetadata({ generation_mode: 'flux_img2img' });
   } else if (generationMode === 'inpaint') {
+    assert(manager !== null);
     canvasOutput = await addInpaint({
       state,
       g,
-      manager: arg.canvasManager,
+      manager,
       l2i,
       i2lNodeType: 'flux_vae_encode',
       denoise,
@@ -209,10 +249,11 @@ export const buildFLUXGraph = async (arg: GraphBuilderArg): Promise<GraphBuilder
     });
     g.upsertMetadata({ generation_mode: 'flux_inpaint' });
   } else if (generationMode === 'outpaint') {
+    assert(manager !== null);
     canvasOutput = await addOutpaint({
       state,
       g,
-      manager: arg.canvasManager,
+      manager,
       l2i,
       i2lNodeType: 'flux_vae_encode',
       denoise,
@@ -229,13 +270,13 @@ export const buildFLUXGraph = async (arg: GraphBuilderArg): Promise<GraphBuilder
     assert<Equals<typeof generationMode, never>>(false);
   }
 
-  if (generationMode === 'img2img' || generationMode === 'inpaint' || generationMode === 'outpaint') {
+  if (manager !== null) {
     const controlNetCollector = g.addNode({
       type: 'collect',
       id: getPrefixedId('control_net_collector'),
     });
     const controlNetResult = await addControlNets({
-      manager: arg.canvasManager,
+      manager,
       entities: canvas.controlLayers.entities,
       g,
       rect: canvas.bbox.rect,
@@ -249,7 +290,7 @@ export const buildFLUXGraph = async (arg: GraphBuilderArg): Promise<GraphBuilder
     }
 
     await addControlLoRA({
-      manager: arg.canvasManager,
+      manager,
       entities: canvas.controlLayers.entities,
       g,
       rect: canvas.bbox.rect,
@@ -283,9 +324,9 @@ export const buildFLUXGraph = async (arg: GraphBuilderArg): Promise<GraphBuilder
   });
   let totalReduxesAdded = fluxReduxResult.addedFLUXReduxes;
 
-  if (generationMode === 'img2img' || generationMode === 'inpaint' || generationMode === 'outpaint') {
+  if (manager !== null) {
     const regionsResult = await addRegions({
-      manager: arg.canvasManager,
+      manager,
       regions: canvas.regionalGuidance.entities,
       g,
       bbox: canvas.bbox.rect,
